@@ -1,13 +1,20 @@
-"""Secciones de explicación para la exposición académica."""
+"""Contenido explicativo de la interfaz para revisar y exponer el proyecto.
+
+Estas funciones muestran ecuaciones, tablas y fuentes; no integran el proceso.
+La implementación numérica está en simulation.py. Mantener esa separación evita
+confundir una fórmula escrita con LaTeX con el cálculo efectivo de los niveles.
+"""
 from pathlib import Path
 import pandas as pd
 import streamlit as st
 from simulation import KC, TI, THETA, KFF, tuning
 
+# Leer código y documentos desde el directorio del módulo, no desde el navegador.
 ROOT = Path(__file__).parent
 
 
 def pid_section(c):
+    """Explicar variables, unidades y signos usando la configuración actual."""
     st.subheader('Convención de signos y PID completo')
     st.write('SP es el nivel deseado; PV es la lectura del sensor. Si PV supera SP, e es negativo. '
              'Con Kp negativo, la contribución proporcional aumenta la extracción y reduce el nivel.')
@@ -31,6 +38,11 @@ def pid_section(c):
 
 
 def model_section():
+    """Derivar el balance geométrico y distinguirlo del modelo identificado.
+
+    La constante 0.001018 no sustituye a 1000/(60*A): son dos alternativas.
+    El usuario elige cuál simular; aquí solo se explica su alcance.
+    """
     st.subheader('Del balance de volumen al nivel')
     st.latex(r'\frac{dV_i}{dt}=Q_{in,i}-Q_{out,i},\quad V_i=A h_i,\quad A=0.30\cdot0.30=0.09\ \mathrm{m^2}')
     st.write('La altura física es 0.45 m = 45 cm y la capacidad geométrica es 40.5 L. '
@@ -54,6 +66,11 @@ def model_section():
 
 
 def simc_section(c):
+    """Mostrar la regla SIMC y comparar parámetros publicados con los aplicados.
+
+    tuning(c) es la misma función que usa el PID. Ki y Kd se derivan de su
+    Kp efectivo; de ese modo la tabla sigue siendo coherente al cambiar modelo.
+    """
     st.subheader('SIMC para procesos integradores')
     st.latex(r'K_c=\frac{1}{k^{\prime}(\tau_c+\theta)},\quad T_i=\min(\tau_1,4(\tau_c+\theta))')
     st.write('Para el integrador ideal, la regla usual da Ti = 4(τc + θ). τc expresa la rapidez deseada; '
@@ -72,6 +89,7 @@ def simc_section(c):
 
 
 def algorithms_section():
+    """Presentar pseudocódigo, diagrama de flujo y los archivos ejecutados."""
     st.subheader('Algoritmo por muestra')
     st.code('''inicializar h, I, filtro y colas en equilibrio
 para t = 0, dt, ..., duración:
@@ -102,14 +120,17 @@ reproducir registros / exportar CSV y PDF''', language='text')
              'en el reproductor; `reporting.py` calcula la comparación y genera archivos; '
              '`app.py` organiza la interacción. `iN` registra el integral usado en la orden '
              'actual e `i_nextN` el estado para la siguiente muestra.')
+    # Mostrar los archivos locales actuales, incluidos sus comentarios. No se
+    # mantiene una copia resumida que pueda desincronizarse del código ejecutado.
     for name in ('simulation.py', 'animation.py', 'reporting.py', 'app.py'):
         with st.expander(name):
             st.code((ROOT/name).read_text(encoding='utf-8'), language='python')
 
 
 def plc_section():
+    """Exponer las redes Ladder y bloques ST, con su estado de validación."""
     st.subheader('PLC: Ladder y Structured Text')
-    st.info('Diseño académico con variables IEC 61131-3. No compilado ni ejecutado en OpenPLC o PLC real. '
+    st.info('Diseño con variables IEC 61131-3. No compilado ni ejecutado en OpenPLC o PLC real. '
             'El Ladder textual se debe dibujar en el editor; no se presenta como proyecto gráfico importable.')
     st.markdown((ROOT/'plc'/'LADDER.md').read_text(encoding='utf-8'))
     for name in ('PID_Filtered.st', 'FlotationBank.st'):
@@ -121,6 +142,11 @@ def plc_section():
 
 
 def conclusions_section(summaries):
+    """Interpretar las métricas calculadas y ofrecer las referencias del proyecto.
+
+    summaries contiene el resultado de metrics para cada estrategia. Las cifras
+    cambian con el ensayo; no se presenta una conclusión fija de estabilidad.
+    """
     st.subheader('Interpretación de esta ejecución')
     for label, rows in summaries.items():
         st.write(f"**{label}:** error final máximo {max(r['Error final (cm)'] for r in rows):.5f} cm; "

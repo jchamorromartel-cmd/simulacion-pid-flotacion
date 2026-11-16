@@ -39,6 +39,27 @@ ecuaciones, tablas, gráficos vectoriales, comparación, conclusiones y referenc
 | `DEPLOYMENT.md` | Publicación y pasos mínimos de Streamlit Cloud |
 | `VALIDACION.md` | Pruebas ejecutadas y límites de validación |
 
+### Recorrido del código para revisión
+
+El código Python incluye comentarios de unidades, ecuaciones, estados y orden
+de ejecución. Para localizar los cálculos, empezar por `simulation.py`:
+
+| Lugar | Qué revisar |
+|---|---|
+| Constantes `BALANCE_GAIN` y `PAPER_GAIN` | Conversión del balance geométrico y pendiente identificada |
+| `Config` | Parámetros, unidades y condiciones del ensayo |
+| `tuning` | Adaptación de Kp a la planta seleccionada |
+| `simulate`, bloques 4a–4f | PV, P/I/D, feedforward, saturación, anti-windup y colas |
+| `simulate`, bloque 4g | Integración del modelo: h[k+1] = h[k] + dt·b·(Qin−Qout) |
+| `metrics` | IAE, ISE, sobreimpulso, recuperación y saturación |
+| `app.main` | Controles, ejecución de los ensayos y gráficos |
+| `animation.animation_html` | Paso de las muestras calculadas al reproductor |
+| `reporting.pdf_report` | Informe y gráficos construidos con los mismos resultados |
+
+Las expresiones `st.latex` de la interfaz sirven para explicar las ecuaciones;
+el cálculo del proceso se ejecuta en `simulate`. El esquema Ladder se titula
+«Diseño Ladder para OpenPLC» y mantiene explícito su estado de validación.
+
 Las dependencias de pruebas se instalan con `python -m pip install -r requirements-dev.txt`.
 Ejecutar `python -m unittest discover -s tests -v`. La prueba de navegador
 `python tests/browser_check.py` usa Chrome/Edge instalado o Chromium de Playwright;

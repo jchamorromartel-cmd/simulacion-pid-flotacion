@@ -1,4 +1,9 @@
-"""CSV e informe PDF vectorial, sin navegador ni servicios externos."""
+"""Exportación y comparación de resultados ya calculados.
+
+El modelo de proceso y PID permanecen en simulation.py. Aquí se serializan las
+muestras en CSV, se compara IAE/ISE y se compone un PDF con las mismas trayectorias.
+El PDF usa gráficos vectoriales de ReportLab; no necesita capturas ni conexión web.
+"""
 import csv
 from dataclasses import asdict
 from io import BytesIO, StringIO
@@ -7,6 +12,12 @@ from simulation import metrics, tuning, KC, THETA
 
 
 def csv_bytes(rows):
+    """Convertir registros a CSV descargable, conservando nombres de columnas.
+
+    UTF-8 con BOM facilita abrir tildes y símbolos de unidades en Excel.
+    StringIO/BytesIO mantienen las exportaciones en memoria, sin compartir
+    archivos temporales entre usuarios de Streamlit.
+    """
     buffer = StringIO(newline='')
     writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
     writer.writeheader()
@@ -15,6 +26,12 @@ def csv_bytes(rows):
 
 
 def comparison(runs, config):
+    """Comparar por celda dos ensayos con las mismas condiciones.
+
+    Mejora (%)=100*(métrica_PID-métrica_FF)/métrica_PID.
+    Un valor negativo indica empeoramiento. None indica que la referencia es
+    cero: no se inventa un porcentaje de mejora para el caso sin error.
+    """
     summaries = {label: metrics(rows, config) for label, rows in runs.items()}
     out = []
     for i in range(3):
@@ -29,11 +46,20 @@ def comparison(runs, config):
 
 
 def pdf_report(config, runs):
+    """Construir y devolver los bytes del informe de la configuración activa.
+
+    config documenta parámetros y supuestos; runs contiene PID y PID+FF.
+    Las métricas se obtienen del motor, evitando implementar otra definición
+    de IAE, ISE o recuperación exclusivamente para el informe.
+    """
+    # Importación local: el motor y la exportación CSV no requieren ReportLab.
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
     from reportlab.graphics.shapes import Drawing, Line, PolyLine, String, Rect
+    # 1. DOCUMENTO. Márgenes/tamaños se expresan en puntos de impresión (1/72 in),
+    # no en las unidades físicas de las celdas. story acumula elementos de páginas.
     output = BytesIO()
     doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=42, leftMargin=42,
                             topMargin=40, bottomMargin=40, title='Simulación PID de tres celdas de flotación',
@@ -43,10 +69,12 @@ def pdf_report(config, runs):
     story = []
 
     def paragraph(text, style='BodyText'):
+        """Añadir texto con estilo y separación uniforme al documento."""
         story.append(Paragraph(text, styles[style]))
         story.append(Spacer(1, 8))
 
     def table(rows, widths):
+        """Construir una tabla repetible al cambiar de página, con texto escapado."""
         data = [[Paragraph(escape(str(v)), styles['BodyText']) for v in row] for row in rows]
         t = Table(data, colWidths=widths, repeatRows=1, hAlign='LEFT')
         t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dfedef')),
@@ -55,6 +83,7 @@ def pdf_report(config, runs):
                                ('LEFTPADDING', (0, 0), (-1, -1), 6)]))
         story.extend([t, Spacer(1, 12)])
 
+    # 2. METODOLOGÍA. Distinguir valores de referencia, ajustes y modelo elegido.
     paragraph('Control PID de tres celdas de flotación', 'Title')
     paragraph('Informe de resultados simulados', 'Heading2')
     paragraph('Simulador académico basado en Quintanilla et al. (2023). No reproduce mediciones experimentales ni se conecta a un PLC real. El artículo utiliza PI; el término derivativo es una ampliación docente.')
@@ -85,6 +114,8 @@ def pdf_report(config, runs):
     paragraph('IAE = integral |SP-h| dt; ISE = integral (SP-h)² dt, ambas por trapecios. Se calculan sobre el estado simulado h; el controlador usa PV, que puede contener ruido. Sobreimpulso = max(0, max(h-SP)), porcentaje respecto a |SP|; no es el porcentaje clásico de un escalón de SP. Recuperación/establecimiento: desde el fin del pulso hasta permanecer en ±0.1 cm hasta finalizar, con al menos 30 s observados. No observado se indica como N/O. Saturación: fracción de muestras con orden sin limitar fuera de rango.')
     story.append(PageBreak())
     paragraph('Comparación PID frente a PID + feedforward', 'Heading1')
+    # 3. RESULTADOS. Las conclusiones se generan con datos de esta ejecución;
+    # no se copia el resultado nominal si el usuario cambia la configuración.
     summary = {name: metrics(rows, config) for name, rows in runs.items()}
     for name, rows in summary.items():
         paragraph(name, 'Heading2')
@@ -106,6 +137,12 @@ def pdf_report(config, runs):
     paragraph('Hay niveles fuera del rango 0-39 cm. No interpretar estados extremos como predicción física de vaciado/rebose.' if out_of_range else 'Los niveles permanecen dentro del rango de sensor 0-39 cm en esta ejecución.')
 
     def chart(variable, cell, title, unit, extra=None):
+        """Trazar ambas estrategias en un sistema de coordenadas vectoriales.
+
+        variable/cell seleccionan una columna (por ejemplo h1). extra añade
+        la línea de SP. Los datos físicos se escalan solo a coordenadas de papel;
+        esta transformación no modifica la simulación ni redondea sus métricas.
+        """
         drawing = Drawing(505, 190)
         x0, y0, w, h = 48, 30, 440, 130
         arrays = [(label, [r['t'] for r in data], [r[f'{variable}{cell}'] for r in data]) for label, data in runs.items()]
@@ -113,6 +150,7 @@ def pdf_report(config, runs):
         if extra is not None:
             values += [extra]
         lo, hi = min(values), max(values)
+        # Un margen mínimo permite representar también señales constantes.
         margin = max((hi-lo)*0.1, 0.05)
         lo, hi = lo-margin, hi+margin
         drawing.add(String(0, 177, title, fontName='Helvetica-Bold', fontSize=10))
@@ -126,11 +164,13 @@ def pdf_report(config, runs):
         if extra is not None:
             yy = y0+(extra-lo)/(hi-lo)*h
             drawing.add(Line(x0, yy, x0+w, yy, strokeColor=colors.grey, strokeDashArray=[3, 3]))
+        # Línea continua con todos los registros: no se interpola una nueva planta.
         for (label, xs, ys), color in zip(arrays, ['#d77700', '#007f86']):
             points = [coordinate for x, y in zip(xs, ys) for coordinate in (x0+x/config.duration*w, y0+(y-lo)/(hi-lo)*h)]
             drawing.add(PolyLine(points, strokeColor=colors.HexColor(color), strokeWidth=1.1))
         return drawing
 
+    # 4. GRÁFICOS. Cada página compara las tres celdas para una variable.
     for variable, title, unit in [('h', 'Niveles', 'cm'), ('qout', 'Caudales reales', 'L/min'),
                                    ('qin', 'Caudales de entrada', 'L/min'), ('cmd', 'Órdenes de bombas', 'L/min'),
                                    ('e', 'Error medido SP-PV', 'cm')]:
@@ -151,8 +191,10 @@ def pdf_report(config, runs):
     paragraph('Streamlit Community Cloud: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app')
 
     def footer(canvas, _doc):
+        """Identificar modelo, paso temporal y página en cada hoja del informe."""
         canvas.setFont('Helvetica', 8)
         canvas.drawString(42, 22, f'Resultados simulados · modelo {config.model} · dt {config.dt:g} s')
         canvas.drawRightString(A4[0]-42, 22, f'Página {_doc.page}')
+    # 5. SALIDA. El botón de Streamlit envía estos mismos bytes como application/pdf.
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
     return output.getvalue()

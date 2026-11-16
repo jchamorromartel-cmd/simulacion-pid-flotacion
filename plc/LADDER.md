@@ -1,4 +1,4 @@
-# Diseño Ladder académico para OpenPLC
+# Diseño Ladder para OpenPLC
 
 Se entrega lógica LD en notación textual de peldaños y los bloques ST complementarios.
 No es un archivo gráfico nativo importable ni se ha compilado o ejecutado en OpenPLC.

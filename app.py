@@ -1,4 +1,15 @@
-"""Simulación académica; ejecutar: streamlit run app.py."""
+"""Interfaz de la simulación de nivel: ejecutar python -m streamlit run app.py.
+
+Mapa del código para revisión:
+  simulation.py -> modelos matemáticos, control PID y métricas numéricas.
+  animation.py + assets/animation.html -> reproducción de las muestras calculadas.
+  reporting.py -> comparación, CSV e informe PDF de la configuración activa.
+  education.py -> explicaciones, ecuaciones mostradas y código Ladder/ST.
+
+Las fórmulas st.latex de este archivo son presentación; el balance que calcula
+los niveles está al final del bucle de simulation.simulate. El motor no depende
+de Streamlit, por lo que puede probarse por separado.
+"""
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -12,15 +23,24 @@ from education import (pid_section, model_section, simc_section,
 
 @st.cache_data(show_spinner=False)
 def calculate_runs(config):
+    """Calcular PID y PID+FF con iguales planta, condiciones y ruido.
+
+    Streamlit reutiliza los resultados solo si Config no cambia. El estado
+    interno de un ensayo no se comparte con el otro: cada simulate inicializa
+    sus propias integrales, filtros y colas.
+    """
     return {label: simulate(config, ff) for label, ff in [('PID', False), ('PID + FF', True)]}
 
 
 @st.cache_data(show_spinner=False)
 def build_pdf(config):
+    """Generar el informe de los mismos ensayos y evitar rehacerlo al navegar."""
     return pdf_report(config, calculate_runs(config))
 
 
 def main():
+    """Leer controles, ejecutar el motor y organizar las nueve secciones."""
+    # 1. PRESENTACIÓN. El CSS solo ajusta tamaños y colores; no altera cálculos.
     st.set_page_config(page_title='PID de flotación', layout='wide')
     st.markdown('''<style>
     .block-container{padding-top:2rem;max-width:1450px}
@@ -31,6 +51,8 @@ def main():
     st.title('Control PID de nivel en tres celdas de flotación')
     st.caption('Quintanilla et al. (2023), MethodsX 10, 102081. Simulación, no datos experimentales.')
     st.info('El artículo utiliza PI + feedforward. Aquí se conserva un PID completo con derivada filtrada sobre PV como extensión didáctica.')
+    # 2. ENTRADAS DEL ENSAYO. Los valores predeterminados corresponden al caso
+    # estable documentado. Td permanece activo; Ti y Kff tienen un valor por celda.
     with st.sidebar:
         st.header('Configuración')
         model = st.selectbox('Modelo', ['Balance geométrico conservado', 'Identificado del artículo'])
@@ -50,6 +72,9 @@ def main():
             ti_values = tuple(st.number_input(f'Ti celda {i+1} (s)', 5.0, 300.0, float(TI[i]), 1.0) for i in range(3))
             kff_values = tuple(st.slider(f'Kff celda {i+1}', 0.0, 1.0, float(KFF[i]), 0.05) for i in range(3))
         st.caption('Cambiar parámetros vuelve a calcular ambos ensayos. La reproducción vuelve al inicio.')
+    # Config reúne los parámetros con sus unidades para pasar una configuración
+    # coherente al motor, métricas, animación y exportaciones. El texto del selector
+    # se traduce a 'balance' o 'paper'; no se combinan ambas plantas en un ensayo.
     c = Config(duration=duration, sp=sp, initial_level=initial_level, td=td, gain_factor=factor,
                disturbance=disturbance, disturbance_at=at, noise=noise, seed=int(seed),
                model='balance' if model.startswith('Balance') else 'paper', filter_time=filter_time,
@@ -57,22 +82,29 @@ def main():
     st.caption('Balance: Kc original × 0.001018/0.0185185. Identificado: Kc original. '
                'Ti, Kff y filtro configurables; retardos originales; anti-windup Tt = Ti/2. '
                'Cambiar los controles requiere volver a evaluar la respuesta.')
+    # Advertir si el horizonte no permite ver el pulso o la recuperación completa.
     if at >= duration:
         st.warning('La perturbación empieza fuera del intervalo simulado.')
     elif at + pulse_duration >= duration:
         st.warning('Amplía la duración para observar la recuperación después del pulso.')
+    # 3. CÁLCULO ÚNICO. Todas las vistas consumen estos mismos registros:
+    # no se genera una trayectoria distinta para hacer funcionar la animación.
     runs = calculate_runs(c)
     summaries = {label: metrics(rows, c) for label, rows in runs.items()}
+    # 4. NAVEGACIÓN. Cada pestaña presenta una parte del mismo experimento.
     tabs = st.tabs(['Panel principal', 'Configuración PID', 'Modelo matemático', 'Sintonización SIMC',
                     'Gráficos y resultados', 'Comparación y exportación', 'Algoritmos y código',
                     'Código Ladder del PLC', 'Conclusiones y referencias'])
     with tabs[0]:
+        # El reproductor HTML recibe muestras, dt y SP; solo controla su visualización.
         st.subheader('Banco de flotación · reproducción de resultados')
         st.write('Selecciona una estrategia y recorre el tiempo. Los niveles y caudales proceden de las mismas muestras que los gráficos.')
         st.iframe(animation_html(runs, c), height=900, width='stretch', alt='Animación interactiva del banco de flotación')
     with tabs[1]:
         pid_section(c)
     with tabs[2]:
+        # Ecuaciones explicativas y tabla con referencia publicada/valores aplicados.
+        # Cambiar una cadena LaTeX no modifica el modelo ejecutado en simulation.py.
         model_section()
         st.subheader('Parámetros de referencia y aplicados')
         st.dataframe(pd.DataFrame({'Celda': [1, 2, 3], 'Kc artículo': KC, 'Kc aplicado': tuning(c),
@@ -92,6 +124,9 @@ def main():
     with tabs[3]:
         simc_section(c)
     with tabs[4]:
+        # Una figura por variable, tres filas por celda y ambas estrategias.
+        # h: estado; pv: sensor; qin/qout: caudales reales; cmd: orden limitada;
+        # e: SP-PV. Qout se distingue de cmd porque incorpora el retardo de bomba.
         for variable, title, unit in [('h', 'Niveles y setpoint', 'Nivel (cm)'), ('qout', 'Caudales reales de las bombas', 'L/min'), ('pv', 'Lecturas de sensores PV', 'cm'), ('qin', 'Caudales de entrada', 'L/min'), ('cmd', 'Señales de control limitadas', 'L/min'), ('e', 'Error medido SP-PV', 'cm')]:
             fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
                                 subplot_titles=[f'Celda / bomba {i}' for i in (1, 2, 3)])
@@ -110,12 +145,15 @@ def main():
             fig.update_layout(height=700, title=title, hovermode='x unified')
             st.plotly_chart(fig, width='stretch')
 
+        # Se grafica el incremento sobre 45 L/min, no el caudal total de alimentación.
         disturbance_fig = go.Figure()
         disturbance_fig.add_trace(go.Scatter(x=[r['t'] for r in runs['PID']],
                                              y=[r['disturbance'] for r in runs['PID']], name='Perturbación de alimentación', line_shape='hv'))
         disturbance_fig.update_layout(title='Perturbación respecto a 45 L/min', xaxis_title='Tiempo (s)', yaxis_title='L/min')
         st.plotly_chart(disturbance_fig, width='stretch')
     with tabs[5]:
+        # IAE e ISE bajos representan menor error acumulado. La mejora se normaliza
+        # por el ensayo PID y no se divide entre cero en el equilibrio sin errores.
         st.subheader('Comparación cuantitativa')
         cols = st.columns(3)
         for i, col in enumerate(cols):
@@ -125,10 +163,12 @@ def main():
                        f'{100*(before-after)/before:.1f}% mejora' if before else 'Sin error')
         st.dataframe(pd.DataFrame([dict(Modo=label, **row) for label, rows in summaries.items() for row in rows]), hide_index=True)
         st.caption('Recuperación: desde el fin del pulso hasta permanecer en ±0.1 cm hasta el final, con al menos 30 s observados; vacío = no observable o no recuperado. Oscilación final: pico a pico en los últimos 60 s. IAE e ISE usan el estado h; el error graficado usa PV.')
+        # Los niveles fuera del rango se informan sin truncarlos artificialmente.
         for label, rows in runs.items():
             if any(r[f'h{i}'] < 0 or r[f'h{i}'] > 39 for r in rows for i in (1, 2, 3)):
                 st.warning(f'{label}: nivel fuera del rango de sensor 0–39 cm. No se recorta el estado para ocultar la pérdida de control.')
 
+        # Descargas construidas desde runs/config, iguales a los gráficos mostrados.
         st.subheader('Mejora por celda')
         st.dataframe(pd.DataFrame(comparison(runs, c)), hide_index=True, width='stretch')
         for label, rows in runs.items():
