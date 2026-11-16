@@ -4,6 +4,12 @@ Basado en Quintanilla et al. (2023), DOI https://doi.org/10.1016/j.mex.2023.1020
 
 **Importante:** el artículo utiliza PI y PI+feedforward. El término derivativo (Td) de esta aplicación es una ampliación didáctica; no se afirma que los autores hayan probado PID completo. No se conecta a un PLC real.
 
+Aplicación web (enlace de despliegue proporcionado por el autor):
+https://simulacion-pid-flotacion.streamlit.app/
+
+Para la entrega al docente, consultar `ENTREGA_DOCENTE.md`. El ZIP se genera con
+`python tools/build_delivery.py` y se guarda en `entrega/simulacion-pid-flotacion.zip`.
+
 ## Aplicación ampliada
 
 Se conservan el motor estable, los modelos alternativos y los gráficos anteriores.
@@ -184,5 +190,5 @@ https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion
 
 La rama es `main`. No se modificó `minedu-saas` ni otros proyectos.
 `tools/publish_github.py` limita cuenta y nombre y evita credenciales en archivos.
-El despliegue de la aplicación sigue pendiente: seguir [DEPLOYMENT.md](DEPLOYMENT.md).
-Todavía no hay una URL de Streamlit pública confirmada.
+El autor comunicó el despliegue en https://simulacion-pid-flotacion.streamlit.app/ .
+Las instrucciones de instalación y despliegue se conservan en [DEPLOYMENT.md](DEPLOYMENT.md).

@@ -5,8 +5,12 @@
 El repositorio se publicó después de recibir autorización expresa del propietario:
 https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion
 La rama publicada es `main`. No se modificó ningún otro proyecto.
-El despliegue en Streamlit Community Cloud sigue pendiente; no hay una URL de
-aplicación pública verificada. El repositorio GitHub no sustituye al servidor Streamlit.
+El propietario comunicó que completó el despliegue en Streamlit Community Cloud:
+https://simulacion-pid-flotacion.streamlit.app/
+La verificación independiente desde el entorno de asistencia no se pudo completar;
+comprobar el enlace en una ventana privada antes de entregar. El repositorio
+GitHub no sustituye al servidor Streamlit. Los pasos siguientes se conservan
+para poder reproducir el despliegue.
 
 Nombre solicitado: `simulacion-pid-flotacion`.
 Cuenta detectada mediante GitHub: `jchamorromartel-cmd`.

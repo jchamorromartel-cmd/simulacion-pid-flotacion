@@ -19,3 +19,4 @@ artifacts/
 .vscode/
 node_modules/
 dist/
+entrega/

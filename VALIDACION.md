@@ -94,8 +94,12 @@ configurar E/S y comprobar el banco físico.
 
 GitHub Actions arrancó automáticamente al publicar. Los resultados pueden consultarse
 en https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion/actions .
-No se accedió a una sesión autenticada de Streamlit Cloud ni se verificó una URL
-pública de la aplicación. Ver `DEPLOYMENT.md` para completar estos pasos.
+No se accedió a una sesión autenticada de Streamlit Cloud. Posteriormente el
+propietario informó que completó el despliegue y proporcionó la URL
+https://simulacion-pid-flotacion.streamlit.app/ . La comprobación independiente
+desde el entorno de asistencia no completó la carga de la interfaz; no se afirma
+que ese intento valide o invalide el funcionamiento público. Comprobar en una
+ventana privada antes de la entrega. Ver `DEPLOYMENT.md`.
 
 Las pruebas locales no sustituyen la comprobación de acceso público y el
 funcionamiento en el entorno Cloud después de desplegar.
