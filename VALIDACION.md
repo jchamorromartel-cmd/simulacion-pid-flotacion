@@ -6,8 +6,11 @@ Fecha de trabajo: 16 de noviembre de 2026, zona America/Bogota.
 
 Se creó `backups/pre_ampliacion_20261116_135432/` antes de modificar la versión
 estable. Incluye app, motor, pruebas, README, dependencias y referencia anterior.
-Los respaldos están excluidos de Git. El repositorio local es nuevo y solo
-corresponde a esta carpeta; no tiene remoto configurado ni publicaciones.
+Los respaldos están excluidos de Git. El repositorio es nuevo y solo
+corresponde a esta carpeta. Después de la autorización del usuario se publicó
+en https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion, rama `main`.
+El primer commit publicado es `604bb4f3f9931eaa45ecbd863bb7adf83add696c`;
+se comprobó la igualdad del SHA local y remoto tras el push.
 
 Python del entorno local: 3.13.14. Dependencias comprobadas: Streamlit 1.67.0,
 Pandas 3.1.1, Plotly 7.1.0, NumPy 2.5.5, ReportLab 4.5.1, pypdf 6.21.4,
@@ -89,10 +92,10 @@ no es un proyecto gráfico OpenPLC importable. No se compiló, no se simuló
 en OpenPLC ni se ejecutó en un PLC real. Resta validar el diseño en el editor,
 configurar E/S y comprobar el banco físico.
 
-GitHub Actions está configurado pero no se ha ejecutado en el servicio remoto.
-No se creó ni se publicó repositorio porque falta la autorización expresa
-del usuario. No se accedió a una sesión autenticada de Streamlit Cloud ni se
-verificó una URL pública. Ver `DEPLOYMENT.md` para completar estos pasos.
+GitHub Actions arrancó automáticamente al publicar. Los resultados pueden consultarse
+en https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion/actions .
+No se accedió a una sesión autenticada de Streamlit Cloud ni se verificó una URL
+pública de la aplicación. Ver `DEPLOYMENT.md` para completar estos pasos.
 
 Las pruebas locales no sustituyen la comprobación de acceso público y el
 funcionamiento en el entorno Cloud después de desplegar.

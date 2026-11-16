@@ -158,7 +158,10 @@ y permite descargar órdenes, caudales reales, términos P/I/D y saturación.
 
 ## Publicación
 
-El repositorio local usa `main`. Publicar solo después de autorización expresa,
-con el nombre nuevo `simulacion-pid-flotacion`; no se debe tocar `minedu-saas`.
+Repositorio público, publicado con autorización del propietario:
+https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion
+
+La rama es `main`. No se modificó `minedu-saas` ni otros proyectos.
 `tools/publish_github.py` limita cuenta y nombre y evita credenciales en archivos.
-Seguir [DEPLOYMENT.md](DEPLOYMENT.md). No hay una URL pública confirmada todavía.
+El despliegue de la aplicación sigue pendiente: seguir [DEPLOYMENT.md](DEPLOYMENT.md).
+Todavía no hay una URL de Streamlit pública confirmada.

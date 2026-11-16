@@ -2,10 +2,11 @@
 
 ## Estado
 
-El repositorio local está preparado en esta carpeta, rama `main`. No se modifica
-ningún otro proyecto. No se ha publicado el repositorio ni desplegado en internet.
-La publicación requiere la autorización explícita solicitada por el propietario.
-No se asigna ni se anuncia una URL pública antes de verificarla.
+El repositorio se publicó después de recibir autorización expresa del propietario:
+https://github.com/jchamorromartel-cmd/simulacion-pid-flotacion
+La rama publicada es `main`. No se modificó ningún otro proyecto.
+El despliegue en Streamlit Community Cloud sigue pendiente; no hay una URL de
+aplicación pública verificada. El repositorio GitHub no sustituye al servidor Streamlit.
 
 Nombre solicitado: `simulacion-pid-flotacion`.
 Cuenta detectada mediante GitHub: `jchamorromartel-cmd`.
@@ -76,9 +77,9 @@ Fuente oficial: https://docs.streamlit.io/deploy/streamlit-community-cloud/deplo
 ## Comprobación pública pendiente
 
 ```text
-[ ] Autorización expresa del propietario para publicar
-[ ] Repositorio nuevo creado; identidad y rama verificadas
-[ ] Commit y push de main
+[x] Autorización expresa del propietario para publicar
+[x] Repositorio nuevo creado; identidad y rama verificadas
+[x] Commit y push de main
 [ ] Instalación y arranque en Cloud sin errores
 [ ] URL abierta sin autenticación
 [ ] Reproducción, simulación y PDF comprobados desde la URL pública
