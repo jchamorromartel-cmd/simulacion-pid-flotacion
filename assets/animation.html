@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{font-family:system-ui,sans-serif;color:#173343;color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f4f8fa;padding:16px;border-radius:16px}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}button,select{font:inherit;padding:9px 13px;border:1px solid #bfd0d9;border-radius:8px;background:white;color:#173343}button{cursor:pointer}#play{background:#007f86;color:white;border-color:#007f86}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #e89829}label{font-size:14px}#timeline{width:100%;accent-color:#007f86}.time{display:flex;justify-content:space-between;margin:14px 0 4px;font-variant-numeric:tabular-nums}.scene{overflow-x:auto}svg{width:100%;min-width:660px;display:block}.tank{fill:white;stroke:#36556a;stroke-width:2}.liquid{fill:#29a5aa}.pipe{fill:none;stroke:#b6ccd5;stroke-width:8;stroke-linejoin:round}.flow{fill:none;stroke:#007f86;stroke-width:3;stroke-dasharray:6 9}.pump{fill:#e9f5f4;stroke:#08767a;stroke-width:2}text{font:13px system-ui;fill:#173343}.name{font-weight:700;font-size:17px}.small{font-size:11px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{padding:12px;background:white;border:1px solid #d7e4e8;border-radius:10px;font-size:14px;line-height:1.7}.card strong{display:block}.alert{color:#a43c16;font-weight:600}#note{font-size:12px;color:#506775;margin:10px 0 0}@media(max-width:550px){body{padding:10px}.cards{grid-template-columns:1fr}.controls{gap:6px}button,select{padding:7px 9px}}
+</style></head><body>
+<div class="controls" aria-label="Controles de reproducción">
+<button id="play" type="button">Reproducir</button><button id="pause" type="button">Pausar</button><button id="reset" type="button">Reiniciar</button>
+<label>Velocidad <select id="speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="30">30×</option></select></label>
+<label>Estrategia <select id="mode"></select></label>
+</div>
+<div class="time"><output id="clock" aria-live="off">t = 0.0 s</output><output id="feed"></output></div>
+<label for="timeline">Tiempo de simulación (s)</label><input id="timeline" type="range" min="0" value="0" step="1">
+<div class="scene"><svg viewBox="0 0 1020 390" role="img" aria-label="Banco de tres celdas de flotación conectadas en serie, tanque T-1 y cuatro bombas">
+<path class="pipe" d="M100 195H175V70H265V200 M385 200H450V70H510V200 M630 200H695V70H755V200 M875 200H965V345H65V260"/>
+<path id="flow4" class="flow" d="M100 195H175V70H265V200"/><path id="flow1" class="flow" d="M385 200H450V70H510V200"/><path id="flow2" class="flow" d="M630 200H695V70H755V200"/><path id="flow3" class="flow" d="M875 200H965V345H65V260"/>
+<rect class="tank" x="20" y="145" width="90" height="140" rx="9"/><text class="name" x="38" y="175">T-1</text><text x="30" y="200">Tanque de</text><text x="28" y="218">alimentación</text><text class="small" x="27" y="246">Sin dinámica</text><text class="small" x="27" y="263">simulada</text>
+<g id="cells"></g><g id="pumps"></g>
+<text x="330" y="378" class="small">Retorno esquemático a T-1 · el modelo calcula las tres celdas, no el tanque auxiliar</text>
+</svg></div><div id="cards" class="cards"></div>
+<p id="note">Resultados simulados. Reproducción de muestras calculadas, no conexión a PLC. Altura de celda: 45 cm; línea discontinua: SP. En móvil puedes desplazar el esquema horizontalmente.</p>
+<script>
+'use strict';
+const payload=__SIMULATION_DATA__;
+const el=id=>document.getElementById(id), ns='http://www.w3.org/2000/svg';
+function svg(tag,attrs,parent){const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);parent.appendChild(n);return n;}
+function textAt(x,y,value,parent,cls=''){const n=svg('text',{x,y,class:cls},parent);n.textContent=value;return n;}
+for(let i=1;i<=3;i++){
+ const x=265+(i-1)*245,g=el('cells');
+ svg('rect',{x,y:105,width:120,height:180,rx:6,class:'tank'},g);
+ svg('rect',{id:'level'+i,x:x+2,y:283,width:116,height:0,class:'liquid'},g);
+ svg('line',{id:'sp'+i,x1:x-5,x2:x+125,y1:165,y2:165,stroke:'#b86d0e','stroke-width':2,'stroke-dasharray':'5 4'},g);
+ textAt(x+23,96,'CELDA '+i,g,'name');textAt(x+18,308,'LI-'+i+' · sensor',g);
+ textAt(x+12,330,'',g).id='levelText'+i;
+ const card=document.createElement('div');card.className='card';card.id='card'+i;el('cards').appendChild(card);
+}
+for(const [i,x,y] of [[4,175,140],[1,450,140],[2,695,140],[3,965,245]]){
+ const g=svg('g',{},el('pumps'));svg('circle',{cx:x,cy:y,r:21,class:'pump'},g);
+ const rotor=svg('g',{id:'rotor'+i},g);
+ svg('path',{d:`M${x-14} ${y}H${x+14} M${x} ${y-14}V${y+14}`,stroke:'#08767a','stroke-width':3},rotor);
+ textAt(x-13,y-30,'P-'+i,g);textAt(x-31,y+39,'',g).id='pumpText'+i;
+}
+for(const key of Object.keys(payload.runs)){const option=document.createElement('option');option.value=key;option.textContent=key;el('mode').appendChild(option);}
+let position=0,playing=false,last=null;
+const rows=()=>payload.runs[el('mode').value];
+function render(){
+ const data=rows(),index=Math.min(data.length-1,Math.round(position)),r=data[index];
+ el('timeline').max=data.length-1;el('timeline').value=index;
+ el('clock').textContent=`t = ${r.t.toFixed(1)} s / ${data[data.length-1].t.toFixed(0)} s`;
+ el('feed').textContent=`P-4: ${r.qfeed.toFixed(2)} L/min`;
+ for(let i=1;i<=3;i++){
+  const h=r['h'+i],height=Math.max(0,Math.min(45,h))*4;
+  el('level'+i).setAttribute('height',height);el('level'+i).setAttribute('y',285-height);
+  for(const attr of ['y1','y2'])el('sp'+i).setAttribute(attr,285-r.sp*4);
+  el('levelText'+i).textContent=`${h.toFixed(2)} cm / SP ${r.sp.toFixed(1)}`;
+  el('card'+i).innerHTML=`<strong>Celda ${i} · LI-${i}: ${h.toFixed(2)} cm</strong>SP ${r.sp.toFixed(1)} cm · error ${(r.sp-h).toFixed(2)} cm<br>Entrada ${r['qin'+i].toFixed(2)} · salida ${r['qout'+i].toFixed(2)} L/min<br>Orden P-${i}: ${r['cmd'+i].toFixed(2)} L/min<br><span class="${r['sat'+i]||h<0||h>39?'alert':''}">${h<0||h>39?'Nivel fuera de rango':r['sat'+i]?'Orden saturada':r['qout'+i]>0.01?'Bomba en marcha':'Bomba detenida'}</span>`;
+ }
+ for(let i=1;i<=4;i++){
+  const q=i===4?r.qfeed:r['qout'+i],x=[0,450,695,965,175][i],y=i===3?245:140;
+  el('pumpText'+i).textContent=`${q.toFixed(1)} L/min`;
+  // Estado visual proporcional al caudal de la muestra; no altera niveles.
+  el('rotor'+i).setAttribute('transform',`rotate(${q>0?position*q/5:0},${x},${y})`);
+  el('flow'+i).style.strokeDashoffset=q>0?-(position*q/15):0;
+  el('flow'+i).style.opacity=q>0?1:0.1;
+ }
+ el('play').disabled=playing;
+}
+el('play').onclick=()=>{if(position>=rows().length-1)position=0;playing=true;last=null;render();};
+el('pause').onclick=()=>{playing=false;render();};
+el('reset').onclick=()=>{playing=false;position=0;last=null;render();};
+el('timeline').oninput=()=>{position=Number(el('timeline').value);render();};
+el('mode').onchange=()=>{position=Math.min(position,rows().length-1);render();};
+function frame(now){if(playing&&last!==null){position=Math.min(rows().length-1,position+(now-last)/1000*Number(el('speed').value)/payload.dt);if(position>=rows().length-1)playing=false;render();}last=now;requestAnimationFrame(frame);}
+render();requestAnimationFrame(frame);
+</script></body></html>

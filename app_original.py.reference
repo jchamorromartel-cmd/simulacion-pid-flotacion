@@ -1,0 +1,142 @@
+"""Simulador académico de tres celdas de flotación con PID y feedforward.
+Basado en Quintanilla et al., MethodsX 10 (2023), 102081.
+NO reproduce datos experimentales ni controla un PLC real.
+Ejecutar: streamlit run app.py
+"""
+from collections import deque
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import streamlit as st
+
+st.set_page_config(page_title='Simulación PID - Flotación', layout='wide')
+st.title('Control PID de nivel en tres celdas de flotación')
+st.caption('Modelo académico inspirado en Quintanilla et al. (2023), MethodsX, DOI: 10.1016/j.mex.2023.102081')
+st.info('El artículo original implementa PI + feedforward. Aquí se añade un término D ajustable para estudiar PID; los resultados son simulados, no mediciones del artículo.')
+
+# Parámetros de referencia de la tabla 2 del artículo.
+KC = np.array([-62.0, -76.0, -85.0])  # L/min por cm
+TI = np.array([56.0, 30.0, 44.0])     # s
+THETA = np.array([7, 6, 3])           # s
+KFF = np.array([0.8, 0.8, 1.0])
+A_CM2 = 30.0 * 30.0  # 300 x 300 mm
+CM3_PER_L = 1000.0
+# A partir del balance de volumen: dh/dt = (Qin - Qout)*1000/(60*A)
+BALANCE_GAIN = CM3_PER_L / (60.0 * A_CM2)
+
+with st.sidebar:
+    st.header('Configuración')
+    duration = st.slider('Duración (segundos)', 180, 900, 600, 30)
+    dt = 1.0
+    sp = st.slider('Nivel objetivo (cm)', 10.0, 37.0, 30.0, 0.5)
+    td = st.slider('Tiempo derivativo Td (s)', 0.0, 10.0, 2.0, 0.5)
+    gain_factor = st.slider('Factor multiplicador de Kc', 0.2, 2.0, 1.0, 0.1)
+    disturbance = st.slider('Perturbación en alimentación (L/min)', 0.0, 25.0, 12.0, 1.0)
+    disturbance_at = st.slider('Inicio perturbación (s)', 30, 450, 180, 10)
+    noise = st.checkbox('Simular ruido de sensor', value=False)
+    seed = st.number_input('Semilla aleatoria', min_value=0, max_value=100000, value=42)
+    st.markdown('**Modo de comparación:** PID frente a PID + feedforward')
+
+# Caudales elegidos para un ejemplo didáctico, no inferidos del artículo.
+Q_BASE = 45.0  # L/min
+Q_MIN, Q_MAX = 0.0, 100.0
+H_MIN, H_MAX = 0.0, 39.0
+
+
+def simulate(feedforward: bool):
+    """Balance de masa discreto y control PID con retardo en la bomba.
+
+    Cada bomba de salida alimenta la siguiente celda. Se limita la salida
+    a 0..100 L/min y se aplica un retardo puro según la tabla 2.
+    """
+    rng = np.random.default_rng(int(seed))
+    n = int(duration / dt) + 1
+    t = np.arange(n) * dt
+    h = np.full(3, sp, dtype=float)
+    integral = np.zeros(3)
+    pv_prev = h.copy()
+    prev_dpv = np.zeros(3)
+    pumps = [deque([Q_BASE] * (int(delay) + 1)) for delay in THETA]
+    records = []
+    for k, now in enumerate(t):
+        qfeed = Q_BASE + (disturbance if disturbance_at <= now < disturbance_at + 100 else 0.0)
+        qin = np.zeros(3)
+        qout = np.zeros(3)
+        pv = np.clip(h + (rng.normal(0, 0.06, 3) if noise else 0), H_MIN, H_MAX)
+        for i in range(3):
+            qin[i] = qfeed if i == 0 else qout[i - 1]
+            e = sp - pv[i]
+            # Derivada filtrada sobre la medición: evita el golpe derivativo al cambiar SP.
+            dpv = (pv[i] - pv_prev[i]) / dt
+            prev_dpv[i] = 0.8 * prev_dpv[i] + 0.2 * dpv
+            kc = KC[i] * gain_factor
+            # Acción feedforward sobre el caudal entrante medido.
+            ff = KFF[i] * (qin[i] - Q_BASE) if feedforward else 0.0
+            candidate_integral = integral[i] + e * dt
+            raw = Q_BASE + kc * (e + candidate_integral / TI[i] - td * prev_dpv[i]) + ff
+            command = float(np.clip(raw, Q_MIN, Q_MAX))
+            # Anti-windup por integración condicional: evitar acumulación al saturar.
+            if Q_MIN < raw < Q_MAX or (raw > Q_MAX and kc * e < 0) or (raw < Q_MIN and kc * e > 0):
+                integral[i] = candidate_integral
+            raw = Q_BASE + kc * (e + integral[i] / TI[i] - td * prev_dpv[i]) + ff
+            command = float(np.clip(raw, Q_MIN, Q_MAX))
+            pumps[i].append(command)
+            qout[i] = pumps[i].popleft()
+            pv_prev[i] = pv[i]
+        records.append({'t': now, 'qfeed': qfeed, **{f'h{i+1}': h[i] for i in range(3)},
+                        **{f'qin{i+1}': qin[i] for i in range(3)},
+                        **{f'qout{i+1}': qout[i] for i in range(3)}})
+        # Balance de masa: h(k+1)=h(k)+dt*(Qin-Qout)*1000/(60*A)
+        h = np.clip(h + dt * BALANCE_GAIN * (qin - qout), H_MIN, H_MAX)
+    df = pd.DataFrame(records)
+    return df
+
+
+def metrics(df):
+    return [float(np.sum(np.abs(sp - df[f'h{i}'])) * dt) for i in (1, 2, 3)]
+
+base = simulate(False)
+ff = simulate(True)
+m_base, m_ff = metrics(base), metrics(ff)
+
+st.subheader('Resultados de la simulación')
+cols = st.columns(3)
+for i, col in enumerate(cols):
+    with col:
+        improvement = 100 * (m_base[i] - m_ff[i]) / m_base[i] if m_base[i] else 0
+        st.metric(f'Celda {i+1}: IAE con feedforward', f'{m_ff[i]:.1f} cm·s', f'{improvement:+.1f}% mejora frente a PID')
+
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, subplot_titles=['Celda 1', 'Celda 2', 'Celda 3'], vertical_spacing=0.08)
+for i in range(1, 4):
+    fig.add_trace(go.Scatter(x=base.t, y=base[f'h{i}'], name=f'Celda {i} PID', mode='lines', line=dict(dash='dot')), row=i, col=1)
+    fig.add_trace(go.Scatter(x=ff.t, y=ff[f'h{i}'], name=f'Celda {i} PID + FF', mode='lines'), row=i, col=1)
+    fig.add_hline(y=sp, line_color='gray', line_dash='dash', row=i, col=1)
+    fig.update_yaxes(title_text='Nivel (cm)', row=i, col=1)
+fig.update_xaxes(title_text='Tiempo (s)', row=3, col=1)
+fig.update_layout(height=750, title='Niveles de pulpa y setpoint', hovermode='x unified')
+st.plotly_chart(fig, use_container_width=True)
+
+fig2 = make_subplots(rows=3, cols=1, shared_xaxes=True, subplot_titles=['Bomba P-1', 'Bomba P-2', 'Bomba P-3'])
+for i in range(1, 4):
+    fig2.add_trace(go.Scatter(x=base.t, y=base[f'qout{i}'], name=f'P-{i} PID', line=dict(dash='dot')), row=i, col=1)
+    fig2.add_trace(go.Scatter(x=ff.t, y=ff[f'qout{i}'], name=f'P-{i} PID + FF'), row=i, col=1)
+    fig2.update_yaxes(title_text='Salida (L/min)', row=i, col=1)
+fig2.update_xaxes(title_text='Tiempo (s)', row=3, col=1)
+fig2.update_layout(height=650, title='Caudales de salida (bombas)', hovermode='x unified')
+st.plotly_chart(fig2, use_container_width=True)
+
+st.subheader('Tabla de sintonización')
+st.dataframe(pd.DataFrame({'Celda': ['1', '2', '3'], 'Kc (L/min/cm)': KC * gain_factor,
+                           'Ti (s)': TI, 'Td (s), extensión PID': [td]*3,
+                           'Retardo (s)': THETA, 'Kff': KFF}), hide_index=True)
+
+st.subheader('Modelo matemático utilizado')
+st.latex(r'\frac{dh_i}{dt}=\frac{1000}{60A}(Q_{in,i}-Q_{out,i}),\quad A=900\ \mathrm{cm^2}')
+st.latex(r'e_i(t)=SP_i-PV_i(t)')
+st.latex(r'Q_{cmd,i}=Q_0+K_{c,i}\left(e_i+\frac{1}{T_{i,i}}\int e_i\,dt-T_{d,i}\frac{dPV_i}{dt}\right)+K_{ff,i}(Q_{in,i}-Q_0)')
+st.write('El retardo de cada bomba se modela con una cola temporal. El término derivativo se filtra y se aplica a PV. Se incluye saturación y anti-windup.')
+st.write('**Supuestos añadidos:** caudal base 45 L/min, rango de bombas 0–100 L/min, nivel máximo 39 cm, perturbación rectangular de 100 s. Son supuestos didácticos, no valores experimentales verificados del artículo.')
+st.write('**Referencia:** Quintanilla et al. (2023), *MethodsX* 10, 102081. https://doi.org/10.1016/j.mex.2023.102081')
+st.download_button('Descargar datos PID (CSV)', base.to_csv(index=False).encode('utf-8'), 'simulacion_pid.csv', 'text/csv')
+st.download_button('Descargar datos PID + feedforward (CSV)', ff.to_csv(index=False).encode('utf-8'), 'simulacion_pid_feedforward.csv', 'text/csv')
